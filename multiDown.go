@@ -1,4 +1,4 @@
-package main
+package multiDown
 
 import (
 	"net/http"
