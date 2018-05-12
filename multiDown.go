@@ -1,4 +1,4 @@
-package multiDown
+package main
 
 import (
 	"net/http"
@@ -10,19 +10,19 @@ import (
 )
 
 // temp save bytes in channel
-type Content struct {
-	id       int
-	contents []byte
+type content struct {
+	id     int
+	buffer []byte
 }
-type Contents []Content
+type contents []content
 
-func (c Contents) Len() int {
+func (c contents) Len() int {
 	return len(c)
 }
-func (c Contents) Less(i, j int) bool {
+func (c contents) Less(i, j int) bool {
 	return c[i].id < c[j].id
 }
-func (c Contents) Swap(i, j int) {
+func (c contents) Swap(i, j int) {
 	c[i], c[j] = c[j], c[i]
 }
 
@@ -36,7 +36,7 @@ func Download(url string, connNum int) ([]byte, error) {
 
 	if connNum != 1 {
 
-		// Get Content-Length
+		// Get content-Length
 		req, err := http.NewRequest("HEAD", url, nil)
 		if err != nil {
 			return nil, err
@@ -46,13 +46,13 @@ func Download(url string, connNum int) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		all, err := strconv.ParseInt(resp.Header.Get("Content-Length"), 10, 64)
+		all, err := strconv.ParseInt(resp.Header.Get("content-Length"), 10, 64)
 		per := all / int64(connNum)
 		if err != nil {
 			return nil, err
 		}
 
-		channel := make(chan Content)
+		channel := make(chan content)
 		for i := 0; i < connNum; i++ {
 			s := strconv.FormatInt(per*int64(i)+1, 10)
 			if s == "1" {
@@ -60,9 +60,9 @@ func Download(url string, connNum int) ([]byte, error) {
 			}
 			e := strconv.FormatInt(per*int64(i+1), 10)
 			if connNum-i == 1 {
-				e = resp.Header.Get("Content-Length")
+				e = resp.Header.Get("content-Length")
 			}
-			go func(i int, s string, e string, channel chan Content) {
+			go func(i int, s string, e string, channel chan content) {
 				client2 := http.Client{}
 				req2, err := http.NewRequest("GET", url, nil)
 				if err != nil {
@@ -80,17 +80,17 @@ func Download(url string, connNum int) ([]byte, error) {
 					panic(err)
 					return
 				}
-				channel <- Content{id: i, contents: b}
+				channel <- content{id: i, buffer: b}
 			}(i, s, e, channel)
 		}
-		con := make(Contents, connNum)
+		con := make(contents, connNum)
 		for i := 0; i < connNum; i++ {
 			con[i] = <-channel
 		}
 		sort.Sort(con)
 		var buf bytes.Buffer
 		for i := 0; i < connNum; i++ {
-			buf.Write(con[i].contents)
+			buf.Write(con[i].buffer)
 		}
 		return buf.Bytes(), nil
 	} else {

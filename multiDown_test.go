@@ -1,4 +1,4 @@
-package multiDown
+package main
 
 import "testing"
 
