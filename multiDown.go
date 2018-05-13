@@ -7,12 +7,14 @@ import (
 	"sort"
 	"bytes"
 	"errors"
+	"io"
 )
 
 // temp save bytes in channel
 type content struct {
 	id     int
 	buffer []byte
+	err    error
 }
 type contents []content
 
@@ -63,7 +65,7 @@ func Download(url string, connNum int) ([]byte, error) {
 				e = resp.Header.Get("content-Length")
 			}
 			go func(i int, s string, e string, channel chan content) {
-				client2 := http.Client{}
+				var client2 http.Client
 				req2, err := http.NewRequest("GET", url, nil)
 				if err != nil {
 					panic(err)
@@ -72,20 +74,31 @@ func Download(url string, connNum int) ([]byte, error) {
 				req2.Header.Set("Range", "bytes="+s+"-"+e)
 				resp2, err := client2.Do(req2)
 				if err != nil {
-					panic(err)
+					channel <- content{err: err}
 					return
 				}
-				b, err := ioutil.ReadAll(resp2.Body)
+				var buf bytes.Buffer
+				written, err := io.Copy(&buf, resp2.Body)
 				if err != nil {
-					panic(err)
+					channel <- content{err: err}
 					return
 				}
-				channel <- content{id: i, buffer: b}
+				eI, _ := strconv.ParseInt(e, 10, 64)
+				sI, _ := strconv.ParseInt(s, 10, 64)
+				if eI-sI > 0 && written == 0 {
+					channel <- content{err: errors.New("not get " + s + "-" + e)}
+					return
+				}
+				ioutil.WriteFile(strconv.Itoa(i), buf.Bytes(), 0755)
+				channel <- content{id: i, buffer: buf.Bytes()}
 			}(i, s, e, channel)
 		}
 		con := make(contents, connNum)
 		for i := 0; i < connNum; i++ {
 			con[i] = <-channel
+			if con[i].err != nil {
+				return nil, con[i].err
+			}
 		}
 		sort.Sort(con)
 		var buf bytes.Buffer
