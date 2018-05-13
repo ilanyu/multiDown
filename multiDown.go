@@ -89,7 +89,6 @@ func Download(url string, connNum int) ([]byte, error) {
 					channel <- content{err: errors.New("not get " + s + "-" + e)}
 					return
 				}
-				ioutil.WriteFile(strconv.Itoa(i), buf.Bytes(), 0755)
 				channel <- content{id: i, buffer: buf.Bytes()}
 			}(i, s, e, channel)
 		}
